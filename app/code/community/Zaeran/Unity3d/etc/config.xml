@@ -43,7 +43,7 @@
                                 <config>
                                     <children>
                                         <unity3d translate="title" module="unity3d">
-                                            <title>Neotheme</title>
+                                            <title>Unity3d API</title>
                                         </unity3d>
                                     </children>
                                 </config>
