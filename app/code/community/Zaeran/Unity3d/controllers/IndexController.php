@@ -2,72 +2,124 @@
 
 class Zaeran_Unity3d_IndexController extends Mage_Core_Controller_Front_Action
 {
-    public function indexAction()
+    /**
+     * Predispatch: insuring that unity3d is enabled for this store
+     *
+     * @return Mage_Core_Controller_Front_Action
+     */
+    public function preDispatch()
     {
-
-//        if ($_POST['FUNCTION'] == "GetCategories") {
-//           /** please refer to categories action, accessible via http://yourmagento.com/index.php/unity3d/index/categories */
-//        }
-//        if ($_POST['FUNCTION'] == "GetProduct") {
-//          /**  please refer to categories action, accessible via http://yourmagento.com/index.php/unity3d/index/product  */
-//        } else if ($_POST['FUNCTION'] == "ORDER") {
-//          /**  please refer to categories action, accessible via http://yourmagento.com/index.php/unity3d/index/order */
-//        }
+        parent::preDispatch();
+        //Force POST request check for all actions in this controller
+        //Insure that unity3d is enabled for this store
+        if (!Mage::getStoreConfig(Zaeran_Unity3d_Helper_Data::XPATH_ENABLED) || !$this->getRequest()->isPost()){
+            $this->norouteAction();
+            $this->setFlag('',self::FLAG_NO_DISPATCH,true);
+        }
+        return $this;
     }
 
-
-    /**  accessible via http://yourmagento.com/index.php/unity3d/index/categories */
+    /**
+     * POST Requests Only
+     * Returns the category information for store
+     *  accessible via http://yourmagento.com/index.php/unity3d/index/categories
+     * @return Mage_Core_Controller_Front_Action | void
+     */
     public function categoriesAction(){
-        $this->getCategoryInfo();
+
+        /** @var Mage_Catalog_Model_Category $rootCategory */
+        $rootCategory = Mage::getModel('catalog/category')
+                            ->load(Mage::app()->getStore()->getRootCategoryId());
+
+        /** @var Mage_Catalog_Model_Resource_Category_Collection $categories */
+        //This doesn't put any sub-category layering on this, all categories are equal.
+        $categories =  Mage::getModel('catalog/category')
+                            ->getCollection()
+                            ->addAttributeToSelect('name')
+                            ->addIdFilter($rootCategory->getAllChildren());
+
+        //normally HTML output would be handled using template, but that would have higher overhead. For this case, json would be preferable, but we'll stick to the current output.
+        $htmlOutput = '';
+        foreach ($categories as $_category) {
+            //any categories that have commas in their name here will fail
+            $htmlOutput .= $_category->getName() . ',' . $_category->getId() . '<br/>';
+        }
+        $this->getResponse()->setBody($htmlOutput);
+        //This is the way we'd handle json
+        //$this->getResponse()->setBody(Mage::helper('core')->jsonEncode($categories->toArray(array('name'))));
     }
 
-    /** accessible via http://yourmagento.com/index.php/unity3d/index/product  */
+    /**
+     * POST Requests Only
+     * Returns the product information for given category
+     *  accessible via  http://yourmagento.com/index.php/unity3d/index/product/
+     * @return Mage_Core_Controller_Front_Action | void
+     */
     public function productAction(){
-        if ($categoryId = $this->getRequest()->getParam('CATEGORYID',false)) {
-            $this->getProductInfo($categoryId);
+
+        $categoryId = $this->getRequest()->getParam('CATEGORYID',false);
+        if ($categoryId === false || !is_numeric($categoryId)){
+            //we may want to force a 500 error here instead of a 404 (let me know if that's how you want the api to work)
+            $this->norouteAction();
+            $this->setFlag('',self::FLAG_NO_DISPATCH,true);
+            return;
         }
-    }
 
-    /** accessible via http://yourmagento.com/index.php/unity3d/index/order */
-    public function orderAction(){
-        try {
-            $this->OrderItems($_POST['PRODUCTS'], $_POST['QTY']);
-        }
-        catch(Exception $ex){
+        /** @var Mage_Catalog_Model_Category $_category */
+        $_category = Mage::getModel('catalog/category')
+                        ->load($categoryId);
 
-        }
-    }
+        /** @var Mage_Catalog_Model_Resource_Product_Collection $products */
+        $products = Mage::getModel('catalog/product')->getCollection()
+                        ->addAttributeToSelect('*')
+                        ->addCategoryFilter($_category);
 
-    public function getCategoryInfo()
-    {
-        $_catagories = Mage::getModel('catalog/category')->getCOllection()
-            ->addAttributeToSelect('id')
-            ->addAttributeToSelect('name');
-
-        foreach ($_catagories as $_category) {
-            echo $_category->getName() . ',' . $_category->getID() . '</br>';
-        }
-    }
-
-    public function getProductInfo($_catID)
-    {
-        $_category = Mage::getModel('catalog/category')->load($_catID);
-        $products = Mage::getModel('catalog/product')
-            ->getCollection()
-            ->addAttributeToSelect('*')
-            ->addCategoryFilter($_category);
-        echo sizeof($products) . '</br>';
+        $htmlOutput = $products->count() . '<br/>';
 
         foreach ($products as $_product) {
-            echo "NEW PRODUCT</br>";
-            echo "ID:" . $_product->getId() . '</br>';
-            echo "NAME:" . $_product->getName() . '</br>';
-            echo "PRICE:" . $_product->getPrice() . '</br>';
-            echo "DESC:" . $_product->getDescription() . '</br>';
-            echo "IMAGE:" . $_product->getThumbnailUrl() . "</br>";
-
+            $htmlOutput .= "NEW PRODUCT<br/>";
+            $htmlOutput .=  "ID:" . $_product->getId() . '<br/>';
+            $htmlOutput .=  "NAME:" . $_product->getName() . '<br/>';
+            $htmlOutput .=  "PRICE:" . $_product->getPrice() . '<br/>';
+            $htmlOutput .=  "DESC:" . $_product->getDescription() . '<br/>';
+            $htmlOutput .=  "IMAGE:" . $_product->getThumbnailUrl() . "<br/>";
         }
+        //the code below would need work to produce the thumbnail url
+        //$this->getResponse()->setBody(Mage::helper('core')->jsonEncode($products->toArray(array('id','name','price','description','thumbnail'))));
+        $this->getResponse()->setBody($htmlOutput);
+
+
     }
+
+    /**
+     * POST Requests Only
+     * Returns the product information for given category
+     *  accessible via  http://yourmagento.com/index.php/unity3d/index/order
+     * @return Mage_Core_Controller_Front_Action | void
+     */
+    public function orderAction(){
+
+        $result = array();
+        //Added try/catch here, if a db transaction fails, it throws an exception that you'll want to handle in your application.
+        try {
+            $products = $this->getRequest()->getParam('PRODUCTS',false);
+            //TODO: validate products
+            $qty = $this->getRequest()->getParam('QTY',false);
+            //TODO: validate qtys
+            //this OrderItems looks like there is no validation happening here but it is multistore compatible
+            //$_POST will work, but to keep inline with Magento Coding, I'd change them to  $this->getRequest()->getParam('PARAM_NAME',false);
+            //check out Mage_Checkout_OnepageController::saveOrderAction and Mage_Sales_Model_Quote for how Magento handles default validation
+            $this->OrderItems($products, $qty);
+            $result['success'] = true;
+        }
+        catch(Exception $ex){
+            Mage:logException($ex);
+            $result['success'] = false;
+            $result['error_message'] = Mage::helper('core')->__('Failed to save order: %s', $ex->getMessage());
+        }
+        $this->getResponse()->setBody(Mage::helper('core')->jsonEncode($result));
+    }
+
 
     //public function OrderItem($customer){
     public function OrderItems($productString, $qtyString)

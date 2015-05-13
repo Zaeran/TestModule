@@ -5,6 +5,23 @@
             <version>0.1.1</version>    <!-- Version number of your module -->
         </Zaeran_Unity3d>
     </modules>
+    <global>
+        <helpers>
+            <unity3d>
+                <class>Zaeran_Unity3d_Helper</class>
+            </unity3d>
+        </helpers>
+        <blocks>
+            <unity3d>
+                <class>Zaeran_Unity3d_Block</class>
+            </unity3d>
+        </blocks>
+        <models>
+            <unity3d>
+                <class>Zaeran_Unity3d_Model</class>
+            </unity3d>
+        </models>
+    </global>
     <frontend>
         <routers>
             <Zaeran_Unity3d>
@@ -16,4 +33,25 @@
             </Zaeran_Unity3d>
         </routers>
     </frontend>
+    <adminhtml>
+        <acl>
+            <resources>
+                <admin>
+                    <children>
+                        <system>
+                            <children>
+                                <config>
+                                    <children>
+                                        <unity3d translate="title" module="unity3d">
+                                            <title>Neotheme</title>
+                                        </unity3d>
+                                    </children>
+                                </config>
+                            </children>
+                        </system>
+                    </children>
+                </admin>
+            </resources>
+        </acl>
+    </adminhtml>
 </config>
