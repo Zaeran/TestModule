@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<config>
+    <modules>
+        <Zaeran_Unity3d>
+            <active>true</active>
+            <codePool>community</codePool>
+            <depends>
+		        <Mage_Catalog />
+            </depends>
+        </Zaeran_Unity3d>
+    </modules>
+</config>
