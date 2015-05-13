@@ -74,8 +74,6 @@ class Zaeran_Unity3d_IndexController extends Mage_Core_Controller_Front_Action
                         ->addAttributeToSelect('*')
                         ->addCategoryFilter($_category);
 
-        $htmlOutput = $products->count() . '<br/>';
-
         foreach ($products as $_product) {
             $htmlOutput .= "NEW PRODUCT<br/>";
             $htmlOutput .=  "ID:" . $_product->getId() . '<br/>';
@@ -83,12 +81,60 @@ class Zaeran_Unity3d_IndexController extends Mage_Core_Controller_Front_Action
             $htmlOutput .=  "PRICE:" . $_product->getPrice() . '<br/>';
             $htmlOutput .=  "DESC:" . $_product->getDescription() . '<br/>';
             $htmlOutput .=  "IMAGE:" . $_product->getThumbnailUrl() . "<br/>";
+
+	    if($_product->isConfigurable()){
+		$htmlOutput .=  "CONFIG: TRUE<br/>";
+
+	    }
         }
         //the code below would need work to produce the thumbnail url
         //$this->getResponse()->setBody(Mage::helper('core')->jsonEncode($products->toArray(array('id','name','price','description','thumbnail'))));
         $this->getResponse()->setBody($htmlOutput);
 
+    }
+	
+     /**
+     * POST Requests Only
+     * Returns the child product information for given product attributes
+     * accessible via  http://yourmagento.com/index.php/unity3d/index/configProduct/
+     * @return Mage_Core_Controller_Front_Action | void
+     */
+    public function childProductAction(){
+	$htmlOutput = "";
+	$ids=Mage::getResourceSingleton('catalog/product_type_configurable')
+            ->getChildrenIds($_POST['PARENTID']);
+	//set up our strings
+	$_attributeStrings = explode(',',$_POST['ASTRING']);
+	$_valueStrings = explode(',',$_POST['VSTRING']);
+	$noOfAttributes = sizeOf($_attributeStrings);
 
+	//get our child products
+	$_subproducts = Mage::getModel('catalog/product')->getCollection()
+    	    ->addAttributeToFilter('entity_id', $ids);
+	
+	$productModel = Mage::getModel('catalog/product');
+	//filter each selected attribute
+	for ($i = 0; $i < $noOfAttributes; $i++) {
+	    $attr = $productModel->getResource()->getAttribute($_attributeStrings[$i]);
+	    if($attr->usesSource()){
+		$attrID = $attr->getSource()->getOptionId($_valueStrings[$i]);
+	    }
+	    $_subproducts->addAttributeToFilter($_attributeStrings[$i], $attrID);
+        } 
+
+	//load each item that matches the criteria
+	foreach($_subproducts as $_product){
+		$loadedProduct = Mage::getModel('catalog/product')->load($_product->getId());
+		$htmlOutput .= "NEW PRODUCT<br/>";
+                $htmlOutput .=  "ID:" . $loadedProduct ->getId() . '<br/>';
+                $htmlOutput .=  "NAME:" . $loadedProduct ->getName() . '<br/>';
+                $htmlOutput .=  "PRICE:" . $loadedProduct ->getPrice() . '<br/>';
+                $htmlOutput .=  "DESC:" . $loadedProduct ->getDescription() . '<br/>';
+                $htmlOutput .=  "IMAGE:" . $loadedProduct ->getThumbnailUrl() . "<br/>";
+
+	}
+	//output results
+	$this->getResponse()->setBody($htmlOutput);
     }
 
     /**
