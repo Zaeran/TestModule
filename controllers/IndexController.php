@@ -32,7 +32,7 @@ class Zaeran_TestModule_IndexController extends Mage_Core_Controller_Front_Actio
 		->getCollection()
 		->addAttributeToSelect('*')
 		->addCategoryFilter($_category);
-	echo sizeof($products).'</br>';
+	
 
         foreach($products as $_product){
 	    echo "NEW PRODUCT</br>";
