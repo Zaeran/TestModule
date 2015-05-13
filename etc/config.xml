@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<config>
+    <modules>
+        <Zaeran_TestModule>
+            <version>0.1.0</version>    <!-- Version number of your module -->
+        </Zaeran_TestModule>
+    </modules>
+    <frontend>
+        <routers>
+            <TestModule>
+                <use>standard</use>
+                <args>
+                    <module>Zaeran_TestModule</module>
+                    <frontName>testmod</frontName>
+                </args>
+            </TestModule>
+        </routers>
+    </frontend>
+</config>
