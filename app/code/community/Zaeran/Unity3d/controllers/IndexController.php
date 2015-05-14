@@ -84,29 +84,34 @@ class Zaeran_Unity3d_IndexController extends Mage_Core_Controller_Front_Action
      * @return Mage_Core_Controller_Front_Action | void
      */
     public function childProductAction(){
-	$htmlOutput = "";
+	//get parent ID
+	$_parentID = $this->getRequest()->getParam('PARENTID',false);
+
+	//load ID of all child objects
 	$ids=Mage::getResourceSingleton('catalog/product_type_configurable')
-            ->getChildrenIds($_POST['PARENTID']);
-	//set up our strings
-	$_attributeStrings = explode(',',$_POST['ASTRING']);
-	$_valueStrings = explode(',',$_POST['VSTRING']);
-	$noOfAttributes = sizeOf($_attributeStrings);
+            ->getChildrenIds($_parentID);
+
+	//load in JSON data
+	$attData = $this->getRequest()->getParam('ATTRIBUTES',false);
+	$JSONArray = Mage::helper('core')->jsonDecode($attData);
+	$noOfAttributes = sizeOf($JSONArray);
 
 	//get our child products
 	$_subproducts = Mage::getModel('catalog/product')->getCollection()
-    	    ->addAttributeToFilter('entity_id', $ids);
+    	    ->addAttributeToFilter('entity_id', $ids)
+	    ->addAttributeToSelect('*');
 	
 	$productModel = Mage::getModel('catalog/product');
 	//filter each selected attribute
 	for ($i = 0; $i < $noOfAttributes; $i++) {
-	    $attr = $productModel->getResource()->getAttribute($_attributeStrings[$i]);
+	    $attr = $productModel->getResource()->getAttribute($JSONArray[$i]["ATTRIBUTE"]);
 	    if($attr->usesSource()){
-		$attrID = $attr->getSource()->getOptionId($_valueStrings[$i]);
+		$attrID = $attr->getSource()->getOptionId($JSONArray[$i]["VALUE"]);
 	    }
-	    $_subproducts->addAttributeToFilter($_attributeStrings[$i], $attrID);
+	    $_subproducts->addAttributeToFilter($JSONArray[$i]["ATTRIBUTE"], $attrID);
         } 
 	//For some reason, only '[]' is returned without this foreach loop
-	foreach($_subproducts as $p){}
+	foreach($_subproducts as $product){}
 	//the code below would need work to produce the thumbnail url
         $this->getResponse()->setBody(Mage::helper('core')->jsonEncode($_subproducts->toArray(array('name','price','description','image', 'type_id'))));
     }
