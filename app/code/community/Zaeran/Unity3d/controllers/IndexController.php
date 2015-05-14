@@ -35,18 +35,14 @@ class Zaeran_Unity3d_IndexController extends Mage_Core_Controller_Front_Action
         //This doesn't put any sub-category layering on this, all categories are equal.
         $categories =  Mage::getModel('catalog/category')
                             ->getCollection()
-                            ->addAttributeToSelect('name')
+                            ->addAttributeToSelect('name', 'id')
                             ->addIdFilter($rootCategory->getAllChildren());
 
-        //normally HTML output would be handled using template, but that would have higher overhead. For this case, json would be preferable, but we'll stick to the current output.
-        $htmlOutput = '';
+        //For some reason, only '[]' is returned without this foreach loop
         foreach ($categories as $_category) {
-            //any categories that have commas in their name here will fail
-            $htmlOutput .= $_category->getName() . ',' . $_category->getId() . '<br/>';
         }
-        $this->getResponse()->setBody($htmlOutput);
-        //This is the way we'd handle json
-        //$this->getResponse()->setBody(Mage::helper('core')->jsonEncode($categories->toArray(array('name'))));
+        //Send data using JSON
+        $this->getResponse()->setBody(Mage::helper('core')->jsonEncode($categories->toArray(array('name'))));
     }
 
     /**
@@ -73,23 +69,11 @@ class Zaeran_Unity3d_IndexController extends Mage_Core_Controller_Front_Action
         $products = Mage::getModel('catalog/product')->getCollection()
                         ->addAttributeToSelect('*')
                         ->addCategoryFilter($_category);
+	//For some reason, only '[]' is returned without this foreach loop
+	foreach ($products as $_product) {}
 
-        foreach ($products as $_product) {
-            $htmlOutput .= "NEW PRODUCT<br/>";
-            $htmlOutput .=  "ID:" . $_product->getId() . '<br/>';
-            $htmlOutput .=  "NAME:" . $_product->getName() . '<br/>';
-            $htmlOutput .=  "PRICE:" . $_product->getPrice() . '<br/>';
-            $htmlOutput .=  "DESC:" . $_product->getDescription() . '<br/>';
-            $htmlOutput .=  "IMAGE:" . $_product->getThumbnailUrl() . "<br/>";
-
-	    if($_product->isConfigurable()){
-		$htmlOutput .=  "CONFIG: TRUE<br/>";
-
-	    }
-        }
         //the code below would need work to produce the thumbnail url
-        //$this->getResponse()->setBody(Mage::helper('core')->jsonEncode($products->toArray(array('id','name','price','description','thumbnail'))));
-        $this->getResponse()->setBody($htmlOutput);
+        $this->getResponse()->setBody(Mage::helper('core')->jsonEncode($products->toArray(array('name','price','description','image', 'type_id'))));
 
     }
 	
@@ -121,20 +105,10 @@ class Zaeran_Unity3d_IndexController extends Mage_Core_Controller_Front_Action
 	    }
 	    $_subproducts->addAttributeToFilter($_attributeStrings[$i], $attrID);
         } 
-
-	//load each item that matches the criteria
-	foreach($_subproducts as $_product){
-		$loadedProduct = Mage::getModel('catalog/product')->load($_product->getId());
-		$htmlOutput .= "NEW PRODUCT<br/>";
-                $htmlOutput .=  "ID:" . $loadedProduct ->getId() . '<br/>';
-                $htmlOutput .=  "NAME:" . $loadedProduct ->getName() . '<br/>';
-                $htmlOutput .=  "PRICE:" . $loadedProduct ->getPrice() . '<br/>';
-                $htmlOutput .=  "DESC:" . $loadedProduct ->getDescription() . '<br/>';
-                $htmlOutput .=  "IMAGE:" . $loadedProduct ->getThumbnailUrl() . "<br/>";
-
-	}
-	//output results
-	$this->getResponse()->setBody($htmlOutput);
+	//For some reason, only '[]' is returned without this foreach loop
+	foreach($_subproducts as $p){}
+	//the code below would need work to produce the thumbnail url
+        $this->getResponse()->setBody(Mage::helper('core')->jsonEncode($_subproducts->toArray(array('name','price','description','image', 'type_id'))));
     }
 
     /**
