@@ -12,9 +12,9 @@ class Zaeran_Unity3d_IndexController extends Mage_Core_Controller_Front_Action
         parent::preDispatch();
         //Force POST request check for all actions in this controller
         //Insure that unity3d is enabled for this store
-        if (!Mage::getStoreConfig(Zaeran_Unity3d_Helper_Data::XPATH_ENABLED) || !$this->getRequest()->isPost()){
+        if (!Mage::getStoreConfig(Zaeran_Unity3d_Helper_Data::XPATH_ENABLED)){//} || !$this->getRequest()->isPost()) {
             $this->norouteAction();
-            $this->setFlag('',self::FLAG_NO_DISPATCH,true);
+            $this->setFlag('', self::FLAG_NO_DISPATCH, true);
         }
         return $this;
     }
@@ -25,22 +25,22 @@ class Zaeran_Unity3d_IndexController extends Mage_Core_Controller_Front_Action
      *  accessible via http://yourmagento.com/index.php/unity3d/index/categories
      * @return Mage_Core_Controller_Front_Action | void
      */
-    public function categoriesAction(){
+    public function categoriesAction()
+    {
 
         /** @var Mage_Catalog_Model_Category $rootCategory */
         $rootCategory = Mage::getModel('catalog/category')
-                            ->load(Mage::app()->getStore()->getRootCategoryId());
+            ->load(Mage::app()->getStore()->getRootCategoryId());
 
         /** @var Mage_Catalog_Model_Resource_Category_Collection $categories */
         //This doesn't put any sub-category layering on this, all categories are equal.
-        $categories =  Mage::getModel('catalog/category')
-                            ->getCollection()
-                            ->addAttributeToSelect('name', 'id')
-                            ->addIdFilter($rootCategory->getAllChildren());
+        $categories = Mage::getModel('catalog/category')
+            ->getCollection()
+            ->addAttributeToSelect('name', 'id')
+            ->addIdFilter($rootCategory->getAllChildren())
+            //this solves the foreach problem you were getting, should only be called after all filters added
+            ->load();
 
-        //For some reason, only '[]' is returned without this foreach loop
-        foreach ($categories as $_category) {
-        }
         //Send data using JSON
         $this->getResponse()->setBody(Mage::helper('core')->jsonEncode($categories->toArray(array('name'))));
     }
@@ -51,69 +51,95 @@ class Zaeran_Unity3d_IndexController extends Mage_Core_Controller_Front_Action
      *  accessible via  http://yourmagento.com/index.php/unity3d/index/product/
      * @return Mage_Core_Controller_Front_Action | void
      */
-    public function productAction(){
+    public function productAction()
+    {
 
-        $categoryId = $this->getRequest()->getParam('CATEGORYID',false);
-        if ($categoryId === false || !is_numeric($categoryId)){
+        $categoryId = $this->getRequest()->getParam('CATEGORYID', false);
+        if ($categoryId === false || !is_numeric($categoryId)) {
             //we may want to force a 500 error here instead of a 404 (let me know if that's how you want the api to work)
             $this->norouteAction();
-            $this->setFlag('',self::FLAG_NO_DISPATCH,true);
+            $this->setFlag('', self::FLAG_NO_DISPATCH, true);
             return;
         }
 
         /** @var Mage_Catalog_Model_Category $_category */
         $_category = Mage::getModel('catalog/category')
-                        ->load($categoryId);
+            ->load($categoryId);
 
+        $outputAttributes = array('name', 'price', 'description', 'type_id', 'image');
         /** @var Mage_Catalog_Model_Resource_Product_Collection $products */
         $products = Mage::getModel('catalog/product')->getCollection()
-                        ->addAttributeToSelect('*')
-                        ->addCategoryFilter($_category);
-	//For some reason, only '[]' is returned without this foreach loop
-	foreach ($products as $_product) {}
+            //seeing we know the attributes we need, we only need to join those attributes instead of * (take load off db processing)
+            // ->addAttributeToSelect('*')
+            ->addAttributeToSelect($outputAttributes)
+            ->addCategoryFilter($_category);
+            //This is if you want to get the final price including specials and tax
+            //->addFinalPrice()
 
-        //the code below would need work to produce the thumbnail url
-        $this->getResponse()->setBody(Mage::helper('core')->jsonEncode($products->toArray(array('name','price','description','image', 'type_id'))));
+        $this->getResponse()->setBody(Mage::helper('core')->jsonEncode($this->_toProductsArray($products, $outputAttributes)));
 
     }
-	
-     /**
+
+
+    /**
+     * Converts Product Collection to array that includes required data.
+     *
+     * @param $collection Mage_Catalog_Model_Resource_Product_Collection
+     * @return array
+     */
+    protected function _toProductsArray($collection, $attributes){
+        $output = array();
+        $fetchImage = in_array('image', $attributes);
+        //This is the cleanest way to achieve this. Inside $collection->toArray(), this is what it's doing.
+        foreach ($collection as $id => $_product){
+            $output[$id] = $_product->toArray($attributes);
+            if ($fetchImage) {
+                $output[$id]['image'] = $_product->getImageUrl();
+            }
+            //This is if you want to get the final price including specials and tax (and the attribute is included within the collection)
+            //$store = $_product->getStore();
+            //$outputArray[$id]['final_price'] = $store->roundPrice($store->convertPrice($_product->getFinalPrice()));
+        }
+        return $output;
+    }
+    /**
      * POST Requests Only
      * Returns the child product information for given product attributes
-     * accessible via  http://yourmagento.com/index.php/unity3d/index/configProduct/
+     * accessible via  http://yourmagento.com/index.php/unity3d/index/childProduct/
      * @return Mage_Core_Controller_Front_Action | void
      */
-    public function childProductAction(){
-	//get parent ID
-	$_parentID = $this->getRequest()->getParam('PARENTID',false);
-
-	//load ID of all child objects
-	$ids=Mage::getResourceSingleton('catalog/product_type_configurable')
+    public function childProductAction()
+    {
+        //get parent ID
+        $_parentID = $this->getRequest()->getParam('PARENTID', false);
+        if (!$_parentID){
+            return;
+        }
+        //load ID of all child objects
+        $ids = Mage::getResourceSingleton('catalog/product_type_configurable')
             ->getChildrenIds($_parentID);
 
-	//load in JSON data
-	$attData = $this->getRequest()->getParam('ATTRIBUTES',false);
-	$JSONArray = Mage::helper('core')->jsonDecode($attData);
-	$noOfAttributes = sizeOf($JSONArray);
+        //load in JSON data
+        $attData = $this->getRequest()->getParam('ATTRIBUTES', false);
+        $JSONArray = Mage::helper('core')->jsonDecode($attData);
 
-	//get our child products
-	$_subproducts = Mage::getModel('catalog/product')->getCollection()
-    	    ->addAttributeToFilter('entity_id', $ids)
-	    ->addAttributeToSelect('*');
-	
-	$productModel = Mage::getModel('catalog/product');
-	//filter each selected attribute
-	for ($i = 0; $i < $noOfAttributes; $i++) {
-	    $attr = $productModel->getResource()->getAttribute($JSONArray[$i]["ATTRIBUTE"]);
-	    if($attr->usesSource()){
-		$attrID = $attr->getSource()->getOptionId($JSONArray[$i]["VALUE"]);
-	    }
-	    $_subproducts->addAttributeToFilter($JSONArray[$i]["ATTRIBUTE"], $attrID);
-        } 
-	//For some reason, only '[]' is returned without this foreach loop
-	foreach($_subproducts as $product){}
-	//the code below would need work to produce the thumbnail url
-        $this->getResponse()->setBody(Mage::helper('core')->jsonEncode($_subproducts->toArray(array('name','price','description','image', 'type_id'))));
+        $noOfAttributes = sizeOf($JSONArray);
+
+        //get our child products
+        $_subproducts = Mage::getModel('catalog/product')->getCollection()
+            ->addAttributeToFilter('entity_id', $ids)
+            ->addAttributeToSelect('*');
+
+        $productModel = Mage::getModel('catalog/product');
+        //filter each selected attribute
+        for ($i = 0; $i < $noOfAttributes; $i++) {
+            $attr = $productModel->getResource()->getAttribute($JSONArray[$i]["ATTRIBUTE"]);
+            if ($attr->usesSource()) {
+                $attrID = $attr->getSource()->getOptionId($JSONArray[$i]["VALUE"]);
+            }
+            $_subproducts->addAttributeToFilter($JSONArray[$i]["ATTRIBUTE"], $attrID);
+        }
+        $this->getResponse()->setBody(Mage::helper('core')->jsonEncode($this->_toProductsArray($_subproducts, array('name', 'price', 'description', 'image', 'type_id'))));
     }
 
     /**
@@ -122,23 +148,24 @@ class Zaeran_Unity3d_IndexController extends Mage_Core_Controller_Front_Action
      *  accessible via  http://yourmagento.com/index.php/unity3d/index/order
      * @return Mage_Core_Controller_Front_Action | void
      */
-    public function orderAction(){
+    public function orderAction()
+    {
 
         $result = array();
         //Added try/catch here, if a db transaction fails, it throws an exception that you'll want to handle in your application.
         try {
-            $products = $this->getRequest()->getParam('PRODUCTS',false);
+            $products = $this->getRequest()->getParam('PRODUCTS', false);
             //TODO: validate products
-            $qty = $this->getRequest()->getParam('QTY',false);
+            $qty = $this->getRequest()->getParam('QTY', false);
             //TODO: validate qtys
             //this OrderItems looks like there is no validation happening here but it is multistore compatible
             //$_POST will work, but to keep inline with Magento Coding, I'd change them to  $this->getRequest()->getParam('PARAM_NAME',false);
             //check out Mage_Checkout_OnepageController::saveOrderAction and Mage_Sales_Model_Quote for how Magento handles default validation
             $this->OrderItems($products, $qty);
             $result['success'] = true;
-        }
-        catch(Exception $ex){
-            Mage:logException($ex);
+        } catch (Exception $ex) {
+            Mage:
+            logException($ex);
             $result['success'] = false;
             $result['error_message'] = Mage::helper('core')->__('Failed to save order: %s', $ex->getMessage());
         }
