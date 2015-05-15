@@ -12,7 +12,7 @@ class Zaeran_Unity3d_IndexController extends Mage_Core_Controller_Front_Action
         parent::preDispatch();
         //Force POST request check for all actions in this controller
         //Insure that unity3d is enabled for this store
-        if (!Mage::getStoreConfig(Zaeran_Unity3d_Helper_Data::XPATH_ENABLED)){//} || !$this->getRequest()->isPost()) {
+        if (!Mage::getStoreConfig(Zaeran_Unity3d_Helper_Data::XPATH_ENABLED) || !$this->getRequest()->isPost()) {
             $this->norouteAction();
             $this->setFlag('', self::FLAG_NO_DISPATCH, true);
         }
